@@ -51,6 +51,7 @@ a{color:var(--am)}
 .ms{position:relative}.msb{width:100%;text-align:left;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dd{position:absolute;z-index:5;left:0;right:0;top:100%;background:var(--k);color:#f0e6c8;border:2px solid var(--ed);border-radius:6px;padding:8px;max-height:320px;overflow:auto}
 .dd label{display:block;padding:2px 0;font-weight:400;cursor:pointer}.dd .row{margin:0 0 6px}.dd .row input{margin:0;flex:1;width:auto}.ls label:hover{background:#4a443c}
+[hidden]{display:none!important}.chip b{margin-left:4px}#chs{margin-bottom:6px}
 </style></head><body>
 <div class="mc">
 <div class="top">
@@ -67,6 +68,13 @@ a{color:var(--am)}
   <div id="list">Los resultados aparecen acá.</div>
  </section>
  <section><h2>VIDEOS DEL DISCO</h2><div id="vids">Elegí un disco para ver sus videos.</div></section>
+ <section><h2>CANALES</h2>
+  <div id="chs"></div>
+  <div class="row"><input type="text" id="cha" placeholder="Agregar canal (@usuario o link)" style="flex:1;margin:0"><button class="hw" id="chb">+</button></div>
+  <div id="chh" class="row"></div>
+  <div id="chv" style="background:var(--k);color:#f0e6c8;border-radius:4px;max-height:60vh;overflow:auto;padding:4px;margin-top:8px">Elegí un canal. Necesita la clave de YouTube.</div>
+  <button class="hw" id="chm" hidden style="margin-top:8px">Cargar más</button>
+ </section>
 </div>
 <div class="rt">
  <div>
@@ -109,6 +117,7 @@ a{color:var(--am)}
   <label>Tempo</label><input type="number" id="ft1" placeholder="Min"><input type="number" id="ft2" placeholder="Max">
   <label>Vistas</label><input type="number" id="fv1" placeholder="Min"><input type="number" id="fv2" placeholder="Max">
   <label>Año</label><input type="number" id="fy1" placeholder="Min"><input type="number" id="fy2" placeholder="Max">
+  <label>Minutos</label><input type="number" id="fd1" placeholder="Min"><input type="number" id="fd2" placeholder="Max (60)">
   <label>Etiquetas</label><input class="s" id="ftg" placeholder="Escribí y apretá Enter">
  </div>
  <div id="chips"></div>
@@ -135,8 +144,8 @@ $('#dt').onchange=$('#yk').onchange=save;
 
 /* Filtros */
 const MD=()=>({v:[],a:false,x:false});
-const FD={g:MD(),s:MD(),r:MD(),k:MD(),t1:'',t2:'',v1:'',v2:'',y1:'',y2:'',tags:[],topic:false};
-const ids={t1:'ft1',t2:'ft2',v1:'fv1',v2:'fv2',y1:'fy1',y2:'fy2'};
+const FD={g:MD(),s:MD(),r:MD(),k:MD(),t1:'',t2:'',v1:'',v2:'',y1:'',y2:'',d1:'',d2:'60',tags:[],topic:false};
+const ids={t1:'ft1',t2:'ft2',v1:'fv1',v2:'fv2',y1:'fy1',y2:'fy2',d1:'fd1',d2:'fd2'};
 const MK=['g','s','r','k'];
 const clone=o=>JSON.parse(JSON.stringify(o));
 let F=Object.assign(clone(FD),LS.get('cd_f',{}));
@@ -159,7 +168,7 @@ function MS(k,id,items,hasAll){
 const readF=()=>{for(const k in ids)F[k]=$('#'+ids[k]).value.trim();F.topic=$('#ftp').checked};
 const chips=()=>{$('#chips').innerHTML=F.tags.map((t,i)=>'<span class="chip" data-i="'+i+'">'+esc(t)+' ✕</span>').join('')};
 const writeF=()=>{normF();for(const k in ids)$('#'+ids[k]).value=F[k]||'';$('#ftp').checked=!!F.topic;chips();MK.forEach(k=>ms[k].draw())};
-const nAct=()=>Object.keys(ids).filter(k=>F[k]).length+MK.filter(k=>F[k].v.length).length+F.tags.length+(F.topic?1:0);
+const nAct=()=>Object.keys(ids).filter(k=>F[k]&&!(k==='d2'&&F[k]==='60')).length+MK.filter(k=>F[k].v.length).length+F.tags.length+(F.topic?1:0);
 const lbl=()=>{$('#fb').textContent='Filtros'+(nAct()?' ('+nAct()+')':'')};
 $('#fb').onclick=()=>{writeF();$('#fp').hidden=false};
 $('#fx').onclick=()=>{$('#fp').hidden=true};
@@ -181,6 +190,7 @@ const YT='https://www.googleapis.com/youtube/v3/';
 const yf=v=>{
  const sn=v.snippet,vw=+((v.statistics||{}).viewCount||0),tx=(sn.title+' '+(sn.tags||[]).join(' ')).toLowerCase();
  if(F.v1&&vw<+F.v1)return false;if(F.v2&&vw>+F.v2)return false;
+ if(!durOK(v))return false;
  if(F.topic&&!/ - topic$/i.test(sn.channelTitle))return false;
  if(!F.tags.every(t=>tx.includes(t.toLowerCase())))return false;
  const b=tx.match(/(\d{2,3})\s*bpm/);
@@ -210,11 +220,11 @@ async function search(){
   if(cfg.yk){
    const f1=k=>F[k].v.length&&!F[k].x?F[k].v[0]:'';
    const yq=[q,f1('g'),f1('s'),f1('k'),F.t1&&F.t1===F.t2?F.t1+' bpm':''].filter(Boolean).join(' ');
-   const r=await fetch(YT+'search?part=snippet&type=video&maxResults=30&q='+enc(yq)+'&key='+enc(cfg.yk)),j=await r.json();
+   const r=await fetch(YT+'search?part=snippet&type=video&maxResults=50&q='+enc(yq)+'&key='+enc(cfg.yk)),j=await r.json();
    if(!r.ok)throw new Error(j.error&&j.error.message||r.status);
-   const r2=await fetch(YT+'videos?part=snippet,statistics&id='+j.items.map(x=>x.id.videoId).join(',')+'&key='+enc(cfg.yk)),j2=await r2.json();
+   const r2=await fetch(YT+'videos?part=snippet,statistics,contentDetails&id='+j.items.map(x=>x.id.videoId).join(',')+'&key='+enc(cfg.yk)),j2=await r2.json();
    const v=(j2.items||[]).filter(yf);
-   h+='<h3>VIDEOS (YouTube)</h3>'+(v.map(x=>'<div class="it" data-vid="'+x.id+'"><img src="'+esc(x.snippet.thumbnails.default.url)+'" alt=""><span>'+esc(x.snippet.title)+'<small>'+esc(x.snippet.channelTitle)+' - '+(+((x.statistics||{}).viewCount||0)).toLocaleString('es-AR')+' vistas</small></span></div>').join('')||'<p>Sin videos con esos filtros.</p>');
+   h+='<h3>VIDEOS (YouTube)</h3>'+(v.map(x=>'<div class="it" data-vid="'+x.id+'"><img src="'+esc(x.snippet.thumbnails.default.url)+'" alt=""><span>'+esc(x.snippet.title)+'<small>'+esc(x.snippet.channelTitle)+' - '+(+((x.statistics||{}).viewCount||0)).toLocaleString('es-AR')+' vistas - '+dur(isoSec((x.contentDetails||{}).duration))+'</small></span></div>').join('')||'<p>Sin videos con esos filtros.</p>');
   }
   box.innerHTML=h;
  }catch(e){box.textContent='Error: '+e.message}
@@ -233,7 +243,7 @@ async function rel(id){
   box.innerHTML='<h3 style="margin:4px;color:var(--led)">DE YOUTUBE: '+esc(qy)+'</h3>'+j2.items.map(x=>'<div class="it" data-vid="'+x.id.videoId+'"><img src="'+esc(x.snippet.thumbnails.default.url)+'" alt=""><span>'+esc(x.snippet.title)+'<small>'+esc(x.snippet.channelTitle)+'</small></span></div>').join('');
  }catch(e){box.textContent='Error: '+e.message}
 }
-document.addEventListener('click',e=>{const it=e.target.closest('.it');if(!it)return;if(it.dataset.rel)rel(it.dataset.rel);else if(it.dataset.vid)open(it.dataset.vid)});
+document.addEventListener('click',e=>{const it=e.target.closest('.it');if(!it)return;if(it.dataset.rel)rel(it.dataset.rel);else if(it.dataset.vid)open(it.dataset.vid);else if(it.dataset.pl)chVideos(it.dataset.pl,true)});
 $('#go').onclick=search;$('#q').onkeydown=e=>{if(e.key==='Enter')search()};
 
 /* Reproductor y marcas */
@@ -371,5 +381,63 @@ $('#rb').onclick=async()=>{
   mr.start();$('#rb').textContent='■ Detener';$('#rb').classList.add('live');
  }catch(e){$('#rl').textContent='No pude abrir la entrada de audio: '+e.message}
 };
+/* Canales de YouTube */
+const CH0=['jazzwhateverplaylists','PrivatePressMusic','orb-side','oleg_samples','VinyleArcheologie','andrenavarroII','musicspokenwordandmiscellanea','OldschoolMusicJunkie','vinylfrontiereast2690','samplecdarchive'];
+let CANALES=LS.get('cd_ch',null)||CH0,CI=LS.get('cd_chi',{}),chCur=null,pt='',cpl='';
+const isoSec=d=>{const m=/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(d||'');return m?(+m[1]||0)*3600+(+m[2]||0)*60+(+m[3]||0):0};
+const dur=s=>{const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0')};
+const durOK=v=>{const s=isoSec(v.contentDetails&&v.contentDetails.duration);return !((F.d1&&s<F.d1*60)||(F.d2&&s>F.d2*60))};
+async function yget(path,params){const r=await fetch(YT+path+'?'+params+'&key='+enc(cfg.yk)),j=await r.json();if(!r.ok)throw new Error(j.error&&j.error.message||r.status);return j}
+const renderCh=()=>{$('#chs').innerHTML=CANALES.map(h=>'<span class="chip" data-h="'+esc(h)+'">@'+esc(h)+' <b data-x="'+esc(h)+'">✕</b></span>').join('')};
+$('#chs').onclick=e=>{
+ const x=e.target.dataset.x;
+ if(x){CANALES=CANALES.filter(c=>c!==x);LS.set('cd_ch',CANALES);renderCh();return}
+ const c=e.target.closest('.chip');if(c)chOpen(c.dataset.h);
+};
+$('#chb').onclick=()=>{
+ const v=$('#cha').value.trim(),m=v.match(/@([\w.\-]+)/),h=m?m[1]:v.replace(/^@/,'');
+ if(!h||/[\s\/]/.test(h))return;
+ if(!CANALES.includes(h)){CANALES.push(h);LS.set('cd_ch',CANALES);renderCh()}
+ $('#cha').value='';chOpen(h);
+};
+const vi=x=>'<div class="it" data-vid="'+x.id+'"><img src="'+esc(((x.snippet.thumbnails||{}).default||{}).url||'')+'" alt=""><span>'+esc(x.snippet.title)+'<small>'+(+((x.statistics||{}).viewCount||0)).toLocaleString('es-AR')+' vistas - '+dur(isoSec(x.contentDetails.duration))+'</small></span></div>';
+async function chOpen(h){
+ const box=$('#chv');
+ if(!cfg.yk){box.textContent='Pegá tu clave de YouTube arriba para ver los canales.';return}
+ box.textContent='Cargando canal...';$('#chm').hidden=true;
+ try{
+  let c=CI[h];
+  if(!c){
+   const j=await yget('channels','part=contentDetails,snippet&forHandle='+enc('@'+h)),it=(j.items||[])[0];
+   if(!it)throw new Error('No encontré el canal @'+h);
+   c=CI[h]={id:it.id,up:it.contentDetails.relatedPlaylists.uploads,t:it.snippet.title};LS.set('cd_chi',CI);
+  }
+  chCur={h,c};
+  $('#chh').innerHTML='<b>'+esc(c.t)+'</b><button class="hw" data-t="v">Videos</button><button class="hw" data-t="p">Listas</button>';
+  chVideos(c.up,true);
+ }catch(e){box.textContent='Error: '+e.message}
+}
+async function chVideos(pl,reset){
+ const box=$('#chv');
+ if(reset){box.textContent='Cargando...';pt='';cpl=pl}
+ try{
+  const j=await yget('playlistItems','part=snippet&maxResults=50&playlistId='+pl+(pt?'&pageToken='+pt:''));
+  pt=j.nextPageToken||'';
+  const j2=await yget('videos','part=snippet,statistics,contentDetails&id='+j.items.map(x=>x.snippet.resourceId.videoId).join(',')),v=(j2.items||[]).filter(durOK);
+  if(reset)box.innerHTML='';
+  box.insertAdjacentHTML('beforeend',v.map(vi).join('')||(reset&&!pt?'<p>No hay videos con esa duración.</p>':''));
+  $('#chm').hidden=!pt;
+ }catch(e){box.textContent='Error: '+e.message}
+}
+async function chLists(){
+ const box=$('#chv');box.textContent='Cargando listas...';$('#chm').hidden=true;
+ try{
+  const j=await yget('playlists','part=snippet,contentDetails&maxResults=50&channelId='+chCur.c.id);
+  box.innerHTML=j.items.map(x=>'<div class="it" data-pl="'+x.id+'"><img src="'+esc(((x.snippet.thumbnails||{}).default||{}).url||'')+'" alt=""><span>'+esc(x.snippet.title)+'<small>'+x.contentDetails.itemCount+' videos</small></span></div>').join('')||'Este canal no tiene listas.';
+ }catch(e){box.textContent='Error: '+e.message}
+}
+$('#chh').onclick=e=>{const t=e.target.dataset.t;if(!chCur||!t)return;if(t==='v')chVideos(chCur.c.up,true);else chLists()};
+$('#chm').onclick=()=>chVideos(cpl,false);
+renderCh();
 draw();
 </script></body></html>
