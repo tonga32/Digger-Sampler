@@ -27,7 +27,7 @@ input[type=text],input[type=password],input[type=number],select{width:100%;backg
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .row input[type=number],.row select{width:78px;margin:0}
 .m{color:#5d5545}small{display:block;color:#5d5545;font-size:12px;margin-top:6px}
-#list,#vids{background:var(--k);color:#f0e6c8;border-radius:4px;max-height:280px;overflow:auto;padding:4px;margin-top:8px}
+#list,#vids{background:var(--k);color:#f0e6c8;border-radius:4px;max-height:60vh;overflow:auto;padding:4px;margin-top:8px}
 .it{display:flex;gap:8px;align-items:center;padding:5px;border-radius:4px;cursor:pointer}
 .it:hover{background:#4a443c}.it img{width:42px;height:42px;object-fit:cover;background:#000;border-radius:3px}
 .it small{color:var(--am);margin:0}#list h3{margin:6px 4px;font:400 12px Impact;letter-spacing:2px;color:var(--led)}
@@ -197,7 +197,7 @@ async function search(){
    const inc=k=>F[k].v.length&&!F[k].x?(F[k].a?[F[k].v[0]]:F[k].v):[''];
    const urls=[];
    for(const g of inc('g'))for(const s of inc('s'))for(const c of inc('r')){
-    let u='https://api.discogs.com/database/search?type=release&per_page=30&token='+enc(cfg.dt)+'&q='+enc(q);
+    let u='https://api.discogs.com/database/search?type=release&per_page=100&token='+enc(cfg.dt)+'&q='+enc(q);
     if(g)u+='&genre='+enc(g);if(s)u+='&style='+enc(s);if(c)u+='&country='+enc(c);
     if(F.y1&&F.y1===F.y2)u+='&year='+F.y1;urls.push(u);
    }
@@ -205,7 +205,7 @@ async function search(){
    for(const u of urls.slice(0,8)){const r=await fetch(u),j=await r.json();if(!r.ok)throw new Error(j.message||r.status);j.results.forEach(x=>{if(!seen.has(x.id)){seen.add(x.id);todo.push(x)}})}
    const chk=(k,vals)=>{const o=F[k];if(!o.v.length)return true;if(o.x)return !o.v.some(v=>vals.includes(v));return o.a?o.v.every(v=>vals.includes(v)):o.v.some(v=>vals.includes(v))};
    const res=todo.filter(x=>{const y=+x.year;if(!y&&(F.y1||F.y2))return false;if(y&&((F.y1&&y<+F.y1)||(F.y2&&y>+F.y2)))return false;return chk('g',x.genre||[])&&chk('s',x.style||[])&&chk('r',x.country?[x.country]:[])});
-   h+='<h3>DISCOS (Discogs)</h3>'+(res.map(x=>'<div class="it" data-rel="'+x.id+'"><img src="'+esc(x.thumb||'')+'" alt=""><span>'+esc(x.title)+'<small>'+(x.year||'')+'</small></span></div>').join('')||'<p>Sin discos.</p>');
+   h+='<h3>DISCOS (Discogs): '+res.length+' de '+todo.length+' encontrados</h3>'+(res.map(x=>'<div class="it" data-rel="'+x.id+'"><img src="'+esc(x.thumb||'')+'" alt=""><span>'+esc(x.title)+'<small>'+(x.year||'')+'</small></span></div>').join('')||'<p>Sin discos.</p>');
   }else h+='<p>Pegá tu token de Discogs para buscar discos.</p>';
   if(cfg.yk){
    const f1=k=>F[k].v.length&&!F[k].x?F[k].v[0]:'';
@@ -240,15 +240,24 @@ $('#go').onclick=search;$('#q').onkeydown=e=>{if(e.key==='Enter')search()};
 let P=null,ready=false,vid=null,marks=Array(16).fill(null),endT=null,lastD=0,lt='',nm='...';
 const sc=document.createElement('script');sc.src='https://www.youtube.com/iframe_api';document.head.appendChild(sc);
 window.onYouTubeIframeAPIReady=()=>{ready=true;if(vid)load()};
-function open(id,m){vid=id;marks=m||Array(16).fill(null);lt='';draw();if(ready)load()}
-function load(){if(P)P.loadVideoById(vid);else P=new YT.Player('yt',{videoId:vid,playerVars:{playsinline:1,rel:0},events:{onReady:()=>setInterval(tick,50)}})}
+let err=0;
+const YERR={2:'LINK DE VIDEO INVÁLIDO',5:'ERROR DEL REPRODUCTOR',100:'VIDEO NO DISPONIBLE',101:'ESTE VIDEO NO PERMITE REPRODUCIRSE FUERA DE YOUTUBE. PROBÁ OTRO',150:'ESTE VIDEO NO PERMITE REPRODUCIRSE FUERA DE YOUTUBE. PROBÁ OTRO'};
+function open(id,m){
+ vid=id;marks=m||Array(16).fill(null);lt='';err=0;draw();$('#d1').textContent='CARGANDO VIDEO...';
+ if(innerWidth<1100)$('.vw').scrollIntoView({behavior:'smooth',block:'center'});
+ if(ready)load();else setTimeout(()=>{if(!ready)$('#d1').textContent='NO CARGÓ EL REPRODUCTOR DE YOUTUBE (¿BLOQUEADOR DE ANUNCIOS?)'},5000);
+}
+function load(){
+ if(P)P.loadVideoById(vid);
+ else P=new YT.Player('yt',{videoId:vid,playerVars:{playsinline:1,rel:0,origin:location.origin},events:{onReady:()=>setInterval(tick,50),onError:e=>{err=1;$('#d1').textContent=YERR[e.data]||'ERROR '+e.data}}});
+}
 function tick(){
  if(!P||!P.getCurrentTime)return;
  const c=P.getCurrentTime(),d=P.getDuration()||0;
  if(d!==lastD){lastD=d;draw()}
  if(d)$('#ph').style.left=(c/d*100)+'%';
  if(endT!=null&&c>=endT){P.pauseVideo();endT=null}
- const t=P.getVideoData&&P.getVideoData().title;if(t&&t!==lt){lt=t;$('#d1').textContent=t}
+ const t=P.getVideoData&&P.getVideoData().title;if(t&&t!==lt&&!err){lt=t;$('#d1').textContent=t}
  $('#d2').textContent=fmt(c);
  $('#d3').textContent='MARCAS '+marks.filter(x=>x!=null).length+'  NOTAS '+seq.notes.length+'  '+nm;
 }
