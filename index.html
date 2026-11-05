@@ -48,6 +48,9 @@ input[type=text],input[type=password],input[type=number],select{width:100%;backg
 .g{display:grid;grid-template-columns:90px 1fr 1fr;gap:6px 8px;align-items:center}.g label{font-weight:700}.g .s{grid-column:2/4}.g input{margin:0}
 .chip{display:inline-block;background:var(--k);color:var(--am);padding:2px 8px;border-radius:10px;margin:4px 4px 0 0;cursor:pointer;font-size:12px}
 a{color:var(--am)}
+.ms{position:relative}.msb{width:100%;text-align:left;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dd{position:absolute;z-index:5;left:0;right:0;top:100%;background:var(--k);color:#f0e6c8;border:2px solid var(--ed);border-radius:6px;padding:8px;max-height:320px;overflow:auto}
+.dd label{display:block;padding:2px 0;font-weight:400;cursor:pointer}.dd .row{margin:0 0 6px}.dd .row input{margin:0;flex:1;width:auto}.ls label:hover{background:#4a443c}
 </style></head><body>
 <div class="mc">
 <div class="top">
@@ -99,10 +102,10 @@ a{color:var(--am)}
 <div id="fp" hidden><div class="fpn">
  <div class="row" style="justify-content:space-between;margin:0 0 10px"><h2 style="margin:0">FILTROS</h2><button class="hw" id="fx">✕</button></div>
  <div class="g">
-  <label>Género</label><input class="s" id="fg" list="gl" placeholder="Funk / Soul, Jazz...">
-  <label>Estilo</label><input class="s" id="fs" list="sl" placeholder="Boogie, Soul-Jazz...">
-  <label>Región</label><input class="s" id="fr" list="rl2" placeholder="Brazil, Japan, Argentina...">
-  <label>Tonalidad</label><input class="s" id="fk" placeholder="Am, C#m...">
+  <label>Género</label><div class="s ms" id="mg"></div>
+  <label>Estilo</label><div class="s ms" id="mst"></div>
+  <label>Región</label><div class="s ms" id="mr"></div>
+  <label>Tonalidad</label><div class="s ms" id="mk"></div>
   <label>Tempo</label><input type="number" id="ft1" placeholder="Min"><input type="number" id="ft2" placeholder="Max">
   <label>Vistas</label><input type="number" id="fv1" placeholder="Min"><input type="number" id="fv2" placeholder="Max">
   <label>Año</label><input type="number" id="fy1" placeholder="Min"><input type="number" id="fy2" placeholder="Max">
@@ -110,7 +113,7 @@ a{color:var(--am)}
  </div>
  <div id="chips"></div>
  <label style="display:block;margin:8px 0"><input type="checkbox" id="ftp"> Solo canales "Topic" (YouTube)</label>
- <small>Género, estilo, región y año filtran Discogs (se usa el primer valor de cada campo). Vistas, Topic y etiquetas filtran YouTube y necesitan la clave. Tempo y tonalidad se suman a la búsqueda de YouTube y descartan videos cuyo título indique otro BPM.</small>
+ <small>Género, estilo, región y año filtran Discogs (con varios valores se combinan hasta 8 búsquedas). Vistas, Topic y etiquetas filtran YouTube y necesitan la clave. Tempo y tonalidad se suman a la búsqueda de YouTube y descartan videos cuyo título indique otro BPM.</small>
  <div class="row"><select id="sf" style="flex:1;width:auto"><option value="">Filtros guardados...</option></select></div>
  <div class="row"><input type="text" id="sn" placeholder="Nombre para guardar este filtro" style="flex:1;margin:0"><button class="hw" id="sa">+ Guardar</button></div>
  <div class="row" style="justify-content:flex-end"><button class="hw" id="fr0">Restablecer</button><button class="hw live" id="fa">Aplicar</button></div>
@@ -119,6 +122,7 @@ a{color:var(--am)}
 <datalist id="sl"><option>Boogie</option><option>Disco</option><option>Funk</option><option>Soul</option><option>Jazz-Funk</option><option>Soul-Jazz</option><option>Fusion</option><option>Latin Jazz</option><option>Hard Bop</option><option>Modal</option><option>Free Jazz</option><option>Bossa Nova</option><option>Samba</option><option>MPB</option><option>Psychedelic Rock</option><option>Prog Rock</option><option>Afrobeat</option><option>Library Music</option><option>Breakbeat</option><option>Boom Bap</option><option>Jazzy Hip-Hop</option><option>Lo-Fi</option><option>Ambient</option><option>Dub</option><option>Roots Reggae</option><option>Rocksteady</option><option>Cumbia</option><option>Salsa</option><option>Tango</option><option>Gospel</option><option>Rhythm & Blues</option><option>Easy Listening</option><option>Soundtrack</option><option>Krautrock</option><option>Italo-Disco</option><option>House</option><option>Techno</option><option>Jungle</option><option>Drum n Bass</option></datalist>
 <datalist id="rl2"><option>Argentina</option><option>Brazil</option><option>Japan</option><option>US</option><option>UK</option><option>France</option><option>Italy</option><option>Jamaica</option></datalist>
 
+<script src="estilos.js"></script>
 <script>
 const $=s=>document.querySelector(s),enc=encodeURIComponent;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -130,14 +134,32 @@ const save=()=>{cfg={dt:$('#dt').value.trim(),yk:$('#yk').value.trim()};LS.set('
 $('#dt').onchange=$('#yk').onchange=save;
 
 /* Filtros */
-const FD={g:'',s:'',r:'',k:'',t1:'',t2:'',v1:'',v2:'',y1:'',y2:'',tags:[],topic:false};
-const ids={g:'fg',s:'fs',r:'fr',k:'fk',t1:'ft1',t2:'ft2',v1:'fv1',v2:'fv2',y1:'fy1',y2:'fy2'};
+const MD=()=>({v:[],a:false,x:false});
+const FD={g:MD(),s:MD(),r:MD(),k:MD(),t1:'',t2:'',v1:'',v2:'',y1:'',y2:'',tags:[],topic:false};
+const ids={t1:'ft1',t2:'ft2',v1:'fv1',v2:'fv2',y1:'fy1',y2:'fy2'};
+const MK=['g','s','r','k'];
 const clone=o=>JSON.parse(JSON.stringify(o));
 let F=Object.assign(clone(FD),LS.get('cd_f',{}));
+const normF=()=>MK.forEach(k=>{const o=F[k];if(typeof o==='string')F[k]={v:o?o.split(',').map(x=>x.trim()).filter(Boolean):[],a:false,x:false};else if(!o||!Array.isArray(o.v))F[k]=MD()});
+normF();
+const ms={};
+function MS(k,id,items,hasAll){
+ const root=$('#'+id);
+ root.innerHTML='<button type="button" class="hw msb"></button><div class="dd" hidden><div class="row"><button type="button" class="hw rs">Reset</button><input type="text" class="sq" placeholder="Buscar"></div>'+(hasAll?'<label><input type="checkbox" class="ma"> Coincidir con todos</label>':'')+'<label><input type="checkbox" class="mx"> Excluir</label><div class="ls"></div></div>';
+ const b=root.querySelector('.msb'),dd=root.querySelector('.dd'),ls=root.querySelector('.ls'),sq=root.querySelector('.sq'),mx=root.querySelector('.mx'),ma=root.querySelector('.ma');
+ const head=()=>{const o=F[k];b.textContent=(o.v.length?(o.x?'Excluir: ':'')+o.v.join(', '):'Todos')+' ▾'};
+ const list=()=>{const q=sq.value.toLowerCase();ls.innerHTML=items.filter(x=>x.toLowerCase().includes(q)).map(x=>'<label><input type="checkbox" value="'+esc(x)+'"'+(F[k].v.includes(x)?' checked':'')+'> '+esc(x)+'</label>').join('')};
+ const draw=()=>{head();mx.checked=F[k].x;if(ma)ma.checked=F[k].a;list()};
+ b.onclick=()=>{const abrir=dd.hidden;document.querySelectorAll('.dd').forEach(d=>d.hidden=true);dd.hidden=!abrir;if(abrir){sq.value='';list()}};
+ ls.onchange=e=>{const v=e.target.value,i=F[k].v.indexOf(v);if(e.target.checked){if(i<0)F[k].v.push(v)}else if(i>=0)F[k].v.splice(i,1);head()};
+ mx.onchange=()=>{F[k].x=mx.checked;head()};if(ma)ma.onchange=()=>{F[k].a=ma.checked};
+ sq.oninput=list;root.querySelector('.rs').onclick=()=>{F[k]=MD();draw()};
+ ms[k]={draw};draw();
+}
 const readF=()=>{for(const k in ids)F[k]=$('#'+ids[k]).value.trim();F.topic=$('#ftp').checked};
 const chips=()=>{$('#chips').innerHTML=F.tags.map((t,i)=>'<span class="chip" data-i="'+i+'">'+esc(t)+' ✕</span>').join('')};
-const writeF=()=>{for(const k in ids)$('#'+ids[k]).value=F[k]||'';$('#ftp').checked=!!F.topic;chips()};
-const nAct=()=>Object.keys(ids).filter(k=>F[k]).length+F.tags.length+(F.topic?1:0);
+const writeF=()=>{normF();for(const k in ids)$('#'+ids[k]).value=F[k]||'';$('#ftp').checked=!!F.topic;chips();MK.forEach(k=>ms[k].draw())};
+const nAct=()=>Object.keys(ids).filter(k=>F[k]).length+MK.filter(k=>F[k].v.length).length+F.tags.length+(F.topic?1:0);
 const lbl=()=>{$('#fb').textContent='Filtros'+(nAct()?' ('+nAct()+')':'')};
 $('#fb').onclick=()=>{writeF();$('#fp').hidden=false};
 $('#fx').onclick=()=>{$('#fp').hidden=true};
@@ -149,6 +171,8 @@ let SV=LS.get('cd_sf',{});
 const selF=()=>{$('#sf').innerHTML='<option value="">Filtros guardados...</option>'+Object.keys(SV).map(n=>'<option>'+esc(n)+'</option>').join('')};
 $('#sa').onclick=()=>{const n=$('#sn').value.trim();if(!n)return;readF();SV[n]=clone(F);LS.set('cd_sf',SV);selF();$('#sn').value=''};
 $('#sf').onchange=e=>{const n=e.target.value;if(n&&SV[n]){F=Object.assign(clone(FD),clone(SV[n]));writeF()}};
+MS('g','mg',window.GENEROS||[],true);MS('s','mst',window.ESTILOS||[],true);MS('r','mr',window.REGIONES||[],false);MS('k','mk',window.TONOS||[],false);
+document.addEventListener('click',e=>{if(!e.target.closest('.ms'))document.querySelectorAll('.dd').forEach(d=>d.hidden=true)});
 selF();lbl();
 
 /* Búsqueda */
@@ -170,15 +194,22 @@ async function search(){
  save();const box=$('#list');box.textContent='Buscando...';let h='';
  try{
   if(cfg.dt){
-   let u='https://api.discogs.com/database/search?type=release&per_page=30&token='+enc(cfg.dt)+'&q='+enc(q);
-   if(F.g)u+='&genre='+enc(first(F.g));if(F.s)u+='&style='+enc(first(F.s));if(F.r)u+='&country='+enc(first(F.r));
-   if(F.y1&&F.y1===F.y2)u+='&year='+F.y1;
-   const r=await fetch(u),j=await r.json();if(!r.ok)throw new Error(j.message||r.status);
-   const res=j.results.filter(x=>{const y=+x.year;if(!y)return !(F.y1||F.y2);return (!F.y1||y>=+F.y1)&&(!F.y2||y<=+F.y2)});
+   const inc=k=>F[k].v.length&&!F[k].x?(F[k].a?[F[k].v[0]]:F[k].v):[''];
+   const urls=[];
+   for(const g of inc('g'))for(const s of inc('s'))for(const c of inc('r')){
+    let u='https://api.discogs.com/database/search?type=release&per_page=30&token='+enc(cfg.dt)+'&q='+enc(q);
+    if(g)u+='&genre='+enc(g);if(s)u+='&style='+enc(s);if(c)u+='&country='+enc(c);
+    if(F.y1&&F.y1===F.y2)u+='&year='+F.y1;urls.push(u);
+   }
+   const seen=new Set(),todo=[];
+   for(const u of urls.slice(0,8)){const r=await fetch(u),j=await r.json();if(!r.ok)throw new Error(j.message||r.status);j.results.forEach(x=>{if(!seen.has(x.id)){seen.add(x.id);todo.push(x)}})}
+   const chk=(k,vals)=>{const o=F[k];if(!o.v.length)return true;if(o.x)return !o.v.some(v=>vals.includes(v));return o.a?o.v.every(v=>vals.includes(v)):o.v.some(v=>vals.includes(v))};
+   const res=todo.filter(x=>{const y=+x.year;if(!y&&(F.y1||F.y2))return false;if(y&&((F.y1&&y<+F.y1)||(F.y2&&y>+F.y2)))return false;return chk('g',x.genre||[])&&chk('s',x.style||[])&&chk('r',x.country?[x.country]:[])});
    h+='<h3>DISCOS (Discogs)</h3>'+(res.map(x=>'<div class="it" data-rel="'+x.id+'"><img src="'+esc(x.thumb||'')+'" alt=""><span>'+esc(x.title)+'<small>'+(x.year||'')+'</small></span></div>').join('')||'<p>Sin discos.</p>');
   }else h+='<p>Pegá tu token de Discogs para buscar discos.</p>';
   if(cfg.yk){
-   const yq=[q,F.g&&first(F.g),F.s&&first(F.s),F.k,F.t1&&F.t1===F.t2?F.t1+' bpm':''].filter(Boolean).join(' ');
+   const f1=k=>F[k].v.length&&!F[k].x?F[k].v[0]:'';
+   const yq=[q,f1('g'),f1('s'),f1('k'),F.t1&&F.t1===F.t2?F.t1+' bpm':''].filter(Boolean).join(' ');
    const r=await fetch(YT+'search?part=snippet&type=video&maxResults=30&q='+enc(yq)+'&key='+enc(cfg.yk)),j=await r.json();
    if(!r.ok)throw new Error(j.error&&j.error.message||r.status);
    const r2=await fetch(YT+'videos?part=snippet,statistics&id='+j.items.map(x=>x.id.videoId).join(',')+'&key='+enc(cfg.yk)),j2=await r2.json();
