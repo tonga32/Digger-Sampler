@@ -97,12 +97,17 @@ a{color:var(--am)}
   <section><h2>VIDEO</h2>
    <div class="vw"><div id="yt"></div></div>
    <div id="tl" title="Clic para saltar a ese punto"><div id="ph"></div></div>
-   <div class="row"><button class="hw" id="am">Asignar</button><button class="hw" id="clr">Borrar marcas</button>
+   <div class="row"><button class="hw" id="am">Asignar</button><button class="hw" id="clr">Borrar marcas</button><button class="hw" id="dlb">Bajar audio</button>
     <label><input type="checkbox" id="cut" checked> cortar en la siguiente marca</label></div>
   </section>
   <section><h2>GRABADOR DE AUDIO</h2>
    <div class="row"><button class="hw" id="rb">● Grabar audio</button></div>
    <div id="rl" class="m" style="margin-top:8px">Graba tu entrada de audio (micrófono, interfaz o loopback).</div>
+  </section>
+  <section><h2>BIBLIOTECA DE DRUMS</h2>
+   <div class="row" style="margin:0 0 8px"><button class="hw" id="lb">Actualizar lista</button></div>
+   <div id="lib" style="background:var(--k);color:#f0e6c8;border-radius:4px;max-height:50vh;overflow:auto;padding:4px">Leyendo la carpeta drums...</div>
+   <small>Clic en un sonido para escucharlo. "→ pad" lo pone en el primer pad vacío del banco B. "Cargar kit" llena el banco B con los primeros 16 sonidos de esa carpeta.</small>
   </section>
  </div>
 </div>
@@ -251,10 +256,10 @@ $('#go').onclick=search;$('#q').onkeydown=e=>{if(e.key==='Enter')search()};
 let P=null,ready=false,vid=null,marks=Array(16).fill(null),endT=null,lastD=0,lt='',nm='...';
 const sc=document.createElement('script');sc.src='https://www.youtube.com/iframe_api';sc.onerror=()=>{window.ytBlk=1};document.head.appendChild(sc);
 window.onYouTubeIframeAPIReady=()=>{ready=true;if(vid)load()};
-let err=0,bank=0,DR=Array(16).fill(null),dT=-1;
+let err=0,bank=0,DR=Array(16).fill(null),dT=-1,LB=null,LV=null,LBid=null;
 const YERR={2:'LINK DE VIDEO INVÁLIDO',5:'ERROR DEL REPRODUCTOR',100:'VIDEO NO DISPONIBLE',101:'ESTE VIDEO NO PERMITE REPRODUCIRSE FUERA DE YOUTUBE. PROBÁ OTRO',150:'ESTE VIDEO NO PERMITE REPRODUCIRSE FUERA DE YOUTUBE. PROBÁ OTRO'};
 function open(id,m){
- vid=id;marks=m||Array(16).fill(null);lt='';err=0;draw();$('#d1').textContent='CARGANDO VIDEO...';
+ vid=id;marks=m||Array(16).fill(null);lt='';err=0;try{if(LV)LV.stop()}catch(e){}LB=null;LBid=null;draw();$('#d1').textContent='CARGANDO VIDEO...';
  if(innerWidth<1100)$('.vw').scrollIntoView({behavior:'smooth',block:'center'});
  if(ready)load();else setTimeout(()=>{if(!ready)$('#d1').textContent=window.ytBlk?'EL NAVEGADOR BLOQUEÓ EL SCRIPT DE YOUTUBE (BLOQUEADOR, EXTENSIÓN O RED)':'EL REPRODUCTOR DE YOUTUBE TARDA EN CARGAR. PROBÁ DE NUEVO'},5000);
 }
@@ -270,7 +275,7 @@ function tick(){
  if(endT!=null&&c>=endT){P.pauseVideo();endT=null}
  const t=P.getVideoData&&P.getVideoData().title;if(t&&t!==lt&&!err){lt=t;$('#d1').textContent=t}
  $('#d2').textContent=fmt(c);
- $('#d3').textContent='MARCAS '+marks.filter(x=>x!=null).length+'  NOTAS '+seq.notes.length+'  BANCO '+(bank?'B':'A')+'  '+nm;
+ $('#d3').textContent='MARCAS '+marks.filter(x=>x!=null).length+'  NOTAS '+seq.notes.length+'  BANCO '+(bank?'B':'A')+(LB&&LBid===vid?'  AUDIO LOCAL':'')+'  '+nm;
 }
 const CODES=['Digit1','Digit2','Digit3','Digit4','KeyQ','KeyW','KeyE','KeyR','KeyA','KeyS','KeyD','KeyF','KeyZ','KeyX','KeyC','KeyV'];
 const LBL='1234QWERASDFZXCV';
@@ -282,9 +287,17 @@ function draw(){
 }
 function flash(i,b){if(b!==bank)return;const el=document.querySelector('.pad[data-i="'+i+'"]');if(el){el.classList.add('hit');setTimeout(()=>el.classList.remove('hit'),130)}}
 function play(i){
- const t=marks[i];if(t==null||!P)return;
- const nx=marks.filter(x=>x!=null&&x>t).sort((a,b)=>a-b)[0];
- endT=$('#cut').checked&&nx!=null?nx:null;
+ const t=marks[i];if(t==null)return;
+ const nx=marks.filter(x=>x!=null&&x>t).sort((a,b)=>a-b)[0],cut=$('#cut').checked&&nx!=null;
+ if(LB&&LBid===vid){
+  try{if(LV)LV.stop()}catch(e){}
+  const c=AC();if(c.state==='suspended')c.resume();
+  const s=c.createBufferSource();s.buffer=LB;s.connect(c.destination);
+  if(cut)s.start(0,t,nx-t);else s.start(0,t);
+  LV=s;endT=null;if(P&&P.pauseVideo)P.pauseVideo();flash(i,0);return;
+ }
+ if(!P)return;
+ endT=cut?nx:null;
  P.seekTo(t,true);P.playVideo();flash(i,0);
 }
 function padPress(i,sh){
@@ -468,5 +481,75 @@ $('#dl').onchange=async e=>{const fs=[...e.target.files];e.target.value='';setBa
 $('#dc').onclick=()=>{if(!confirm('¿Borrar todos los drums guardados?'))return;DR=Array(16).fill(null);for(let i=0;i<16;i++)dbDel(i);draw()};
 addEventListener('keydown',e=>{if(e.code==='Backquote'&&!e.repeat&&!/INPUT|SELECT/.test(e.target.tagName)){e.preventDefault();setBank(bank?0:1)}});
 dbAll().then(async o=>{for(const k in o){try{DR[k]={name:o[k].name,buf:await AC().decodeAudioData(o[k].data.slice(0))}}catch(e){}}draw()}).catch(()=>{});
+/* Audio local (asistente con yt-dlp y ffmpeg) */
+const HELP='http://127.0.0.1:5577';
+async function bajar(){
+ if(!vid){$('#d1').textContent='PRIMERO ELEGÍ UN VIDEO';return}
+ const id=vid;err=1;$('#d1').textContent='BAJANDO AUDIO... PUEDE TARDAR UN MINUTO';
+ try{
+  const r=await fetch(HELP+'/audio?id='+id);
+  if(!r.ok)throw new Error((await r.text()).slice(0,140)||r.status);
+  const buf=await AC().decodeAudioData(await r.arrayBuffer());
+  if(vid!==id)return;
+  LB=buf;LBid=id;err=0;lt='';$('#d1').textContent='AUDIO LOCAL LISTO: SIN LATENCIA';
+ }catch(e){
+  $('#d1').textContent=e.message==='Failed to fetch'?'NO ENCUENTRO EL ASISTENTE: ABRÍ iniciar.bat Y DEJÁ LA VENTANA ABIERTA':'NO PUDE BAJAR EL AUDIO: '+e.message;
+ }
+}
+$('#dlb').onclick=bajar;
+
+/* Biblioteca de drums: lee la carpeta drums/ del repositorio de GitHub Pages */
+let LIB=[],LG={};const lcache=new Map();
+function repoInfo(){
+ if(!location.hostname.endsWith('.github.io'))return null;
+ const o=location.hostname.split('.')[0],seg=location.pathname.split('/')[1];
+ return{o,r:seg&&!seg.includes('.')?seg:o+'.github.io'};
+}
+const libName=p=>p.split('/').pop().replace(/\.[^.]+$/,'');
+function libDraw(){
+ LG={};LIB.forEach(p=>{const k=p.split('/').slice(1,-1).join(' / ')||'(sueltos)';(LG[k]=LG[k]||[]).push(p)});
+ const ks=Object.keys(LG);
+ $('#lib').innerHTML=ks.length?ks.map(k=>'<div style="margin:8px 4px 2px;color:var(--am)"><b>'+esc(k)+'</b> ('+LG[k].length+') <button class="hw" data-kit="'+esc(k)+'">Cargar kit</button></div>'+LG[k].map(p=>'<div class="it" data-lp="'+esc(p)+'"><span style="flex:1">'+esc(libName(p))+'</span><button class="hw" data-put="'+esc(p)+'">→ pad</button></div>').join('')).join(''):'No hay audios en la carpeta drums. Subí archivos a esa carpeta en GitHub.';
+}
+async function libLoad(){
+ const box=$('#lib'),ri=repoInfo();
+ if(!ri){box.textContent='La biblioteca funciona cuando la página está publicada en GitHub Pages.';return}
+ box.textContent='Leyendo la carpeta drums...';
+ try{
+  const r=await fetch('https://api.github.com/repos/'+ri.o+'/'+ri.r+'/git/trees/HEAD?recursive=1'),j=await r.json();
+  if(!r.ok)throw new Error(j.message||r.status);
+  LIB=j.tree.filter(x=>x.type==='blob'&&/^drums\/.+\.(wav|mp3|ogg|flac|m4a|aif|aiff)$/i.test(x.path)).map(x=>x.path).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  libDraw();
+ }catch(e){box.textContent='No pude leer la carpeta drums: '+e.message}
+}
+async function libBuf(p){
+ if(lcache.has(p))return lcache.get(p);
+ const r=await fetch(p.split('/').map(encodeURIComponent).join('/'));
+ if(!r.ok)throw new Error(r.status);
+ const data=await r.arrayBuffer(),o={data,buf:await AC().decodeAudioData(data.slice(0)),name:libName(p)};
+ lcache.set(p,o);return o;
+}
+async function audicion(p){
+ try{const o=await libBuf(p),c=AC();if(c.state==='suspended')c.resume();const s=c.createBufferSource();s.buffer=o.buf;s.connect(c.destination);s.start()}
+ catch(e){$('#d1').textContent='NO PUDE CARGAR '+libName(p).toUpperCase()}
+}
+async function ponerPad(i,p){
+ try{const o=await libBuf(p);DR[i]={name:o.name,buf:o.buf};dbPut(i,{name:o.name,data:o.data}).catch(()=>{});draw()}
+ catch(e){$('#d1').textContent='NO PUDE CARGAR '+libName(p).toUpperCase()}
+}
+async function cargarKit(k){
+ const ps=(LG[k]||[]).slice(0,16);if(!ps.length)return;
+ if(DR.some(Boolean)&&!confirm('Esto reemplaza los drums del banco B. ¿Seguir?'))return;
+ setBank(1);DR=Array(16).fill(null);for(let i=0;i<16;i++)dbDel(i);draw();
+ for(let i=0;i<ps.length;i++)await ponerPad(i,ps[i]);
+}
+$('#lib').onclick=async e=>{
+ const kb=e.target.closest('[data-kit]');if(kb){await cargarKit(kb.dataset.kit);return}
+ const pb=e.target.closest('[data-put]');
+ if(pb){const i=DR.findIndex(d=>!d);if(i<0){$('#d1').textContent='EL BANCO B ESTÁ LLENO';return}setBank(1);await ponerPad(i,pb.dataset.put);return}
+ const it=e.target.closest('[data-lp]');if(it)audicion(it.dataset.lp);
+};
+$('#lb').onclick=libLoad;
+libLoad();
 draw();
 </script></body></html>
