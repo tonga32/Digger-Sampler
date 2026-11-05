@@ -187,7 +187,7 @@ selF();lbl();
 
 /* Búsqueda */
 const first=s=>s.split(',')[0].trim();
-const YT='https://www.googleapis.com/youtube/v3/';
+const YTAPI='https://www.googleapis.com/youtube/v3/';
 const yf=v=>{
  const sn=v.snippet,vw=+((v.statistics||{}).viewCount||0),tx=(sn.title+' '+(sn.tags||[]).join(' ')).toLowerCase();
  if(F.v1&&vw<+F.v1)return false;if(F.v2&&vw>+F.v2)return false;
@@ -221,9 +221,9 @@ async function search(){
   if(cfg.yk){
    const f1=k=>F[k].v.length&&!F[k].x?F[k].v[0]:'';
    const yq=[q,f1('g'),f1('s'),f1('k'),F.t1&&F.t1===F.t2?F.t1+' bpm':''].filter(Boolean).join(' ');
-   const r=await fetch(YT+'search?part=snippet&type=video&maxResults=50&q='+enc(yq)+'&key='+enc(cfg.yk)),j=await r.json();
+   const r=await fetch(YTAPI+'search?part=snippet&type=video&maxResults=50&q='+enc(yq)+'&key='+enc(cfg.yk)),j=await r.json();
    if(!r.ok)throw new Error(j.error&&j.error.message||r.status);
-   const r2=await fetch(YT+'videos?part=snippet,statistics,contentDetails&id='+j.items.map(x=>x.id.videoId).join(',')+'&key='+enc(cfg.yk)),j2=await r2.json();
+   const r2=await fetch(YTAPI+'videos?part=snippet,statistics,contentDetails&id='+j.items.map(x=>x.id.videoId).join(',')+'&key='+enc(cfg.yk)),j2=await r2.json();
    const v=(j2.items||[]).filter(yf);
    h+='<h3>VIDEOS (YouTube)</h3>'+(v.map(x=>'<div class="it" data-vid="'+x.id+'"><img src="'+esc(x.snippet.thumbnails.default.url)+'" alt=""><span>'+esc(x.snippet.title)+'<small>'+esc(x.snippet.channelTitle)+' - '+(+((x.statistics||{}).viewCount||0)).toLocaleString('es-AR')+' vistas - '+dur(isoSec((x.contentDetails||{}).duration))+'</small></span></div>').join('')||'<p>Sin videos con esos filtros.</p>');
   }
@@ -239,7 +239,7 @@ async function rel(id){
   const qy=((j.artists||[]).map(a=>a.name.replace(/\s\(\d+\)$/,'')).join(' ')+' '+j.title).trim();
   if(!cfg.yk){box.innerHTML='<p>Discogs no tiene videos de este disco. <a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query='+enc(qy)+'">Buscar "'+esc(qy)+'" en YouTube</a>.<br>Con tu clave de YouTube, la búsqueda se hace acá mismo.</p>';return}
   box.textContent='Discogs no tiene videos. Buscando en YouTube...';
-  const r2=await fetch(YT+'search?part=snippet&type=video&maxResults=10&q='+enc(qy)+'&key='+enc(cfg.yk)),j2=await r2.json();
+  const r2=await fetch(YTAPI+'search?part=snippet&type=video&maxResults=10&q='+enc(qy)+'&key='+enc(cfg.yk)),j2=await r2.json();
   if(!r2.ok)throw new Error(j2.error&&j2.error.message||r2.status);
   box.innerHTML='<h3 style="margin:4px;color:var(--led)">DE YOUTUBE: '+esc(qy)+'</h3>'+j2.items.map(x=>'<div class="it" data-vid="'+x.id.videoId+'"><img src="'+esc(x.snippet.thumbnails.default.url)+'" alt=""><span>'+esc(x.snippet.title)+'<small>'+esc(x.snippet.channelTitle)+'</small></span></div>').join('');
  }catch(e){box.textContent='Error: '+e.message}
@@ -394,7 +394,7 @@ let CANALES=LS.get('cd_ch',null)||CH0,CI=LS.get('cd_chi',{}),chCur=null,pt='',cp
 const isoSec=d=>{const m=/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(d||'');return m?(+m[1]||0)*3600+(+m[2]||0)*60+(+m[3]||0):0};
 const dur=s=>{const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0')};
 const durOK=v=>{const s=isoSec(v.contentDetails&&v.contentDetails.duration);return !((F.d1&&s<F.d1*60)||(F.d2&&s>F.d2*60))};
-async function yget(path,params){const r=await fetch(YT+path+'?'+params+'&key='+enc(cfg.yk)),j=await r.json();if(!r.ok)throw new Error(j.error&&j.error.message||r.status);return j}
+async function yget(path,params){const r=await fetch(YTAPI+path+'?'+params+'&key='+enc(cfg.yk)),j=await r.json();if(!r.ok)throw new Error(j.error&&j.error.message||r.status);return j}
 const renderCh=()=>{$('#chs').innerHTML=CANALES.map(h=>'<span class="chip" data-h="'+esc(h)+'">@'+esc(h)+' <b data-x="'+esc(h)+'">✕</b></span>').join('')};
 $('#chs').onclick=e=>{
  const x=e.target.dataset.x;
