@@ -79,8 +79,9 @@ a{color:var(--am)}
 <div class="rt">
  <div>
   <section><h2>PADS</h2>
+   <div class="row" style="margin:0 0 10px"><button class="hw live" id="bkA">Banco A: chops</button><button class="hw" id="bkB">Banco B: drums</button><label class="hw">Cargar drums<input type="file" id="dl" accept="audio/*" multiple hidden></label><button class="hw" id="dc">Borrar drums</button><input type="file" id="df" accept="audio/*" hidden></div>
    <div id="pads"></div>
-   <small>Tocá un pad vacío para marcar el punto actual del video. Un pad con marca suena. Con ASIGNAR activo, el pad toma el punto actual. Shift + pad borra la marca. Teclas: 1 2 3 4 / Q W E R / A S D F / Z X C V, o notas MIDI 36 a 51. Si no responden, hacé clic fuera del video.</small>
+   <small>Tocá un pad vacío para marcar el punto actual del video. Un pad con marca suena. Con ASIGNAR activo, el pad toma el punto actual. Shift + pad borra la marca. Teclas: 1 2 3 4 / Q W E R / A S D F / Z X C V, o notas MIDI 36 a 51. Si no responden, hacé clic fuera del video. Banco B (drums): un pad vacío abre el selector de archivos y el sample queda guardado en este navegador. La tecla a la izquierda del 1 cambia de banco.</small>
   </section>
   <section><h2>SECUENCIA / PIANO ROLL</h2>
    <div class="row"><button class="hw" id="sr">● Grabar</button><button class="hw" id="sp">▶ Reproducir</button><button class="hw" id="ss">■ Parar</button>
@@ -89,7 +90,7 @@ a{color:var(--am)}
     <label>Compases <select id="bars"><option>1</option><option>2</option><option>4</option></select></label>
     <button class="hw" id="cl">Limpiar notas</button><button class="hw" id="sv">Guardar proyecto</button><label class="hw">Abrir<input type="file" id="ld" accept=".json" hidden></label></div>
    <div id="rw"><canvas id="roll"></canvas></div>
-   <small>Clic en la grilla para poner o sacar una nota. Cada columna es una semicorchea. Al grabar, lo que tocás se ajusta a la grilla y se suma a lo que ya había.</small>
+   <small>La grilla muestra las notas del banco activo (A o B) y al reproducir suenan los dos. Clic en la grilla para poner o sacar una nota. Cada columna es una semicorchea. Al grabar, lo que tocás se ajusta a la grilla y se suma a lo que ya había.</small>
   </section>
  </div>
  <div>
@@ -248,14 +249,14 @@ $('#go').onclick=search;$('#q').onkeydown=e=>{if(e.key==='Enter')search()};
 
 /* Reproductor y marcas */
 let P=null,ready=false,vid=null,marks=Array(16).fill(null),endT=null,lastD=0,lt='',nm='...';
-const sc=document.createElement('script');sc.src='https://www.youtube.com/iframe_api';document.head.appendChild(sc);
+const sc=document.createElement('script');sc.src='https://www.youtube.com/iframe_api';sc.onerror=()=>{window.ytBlk=1};document.head.appendChild(sc);
 window.onYouTubeIframeAPIReady=()=>{ready=true;if(vid)load()};
-let err=0;
+let err=0,bank=0,DR=Array(16).fill(null),dT=-1;
 const YERR={2:'LINK DE VIDEO INVÁLIDO',5:'ERROR DEL REPRODUCTOR',100:'VIDEO NO DISPONIBLE',101:'ESTE VIDEO NO PERMITE REPRODUCIRSE FUERA DE YOUTUBE. PROBÁ OTRO',150:'ESTE VIDEO NO PERMITE REPRODUCIRSE FUERA DE YOUTUBE. PROBÁ OTRO'};
 function open(id,m){
  vid=id;marks=m||Array(16).fill(null);lt='';err=0;draw();$('#d1').textContent='CARGANDO VIDEO...';
  if(innerWidth<1100)$('.vw').scrollIntoView({behavior:'smooth',block:'center'});
- if(ready)load();else setTimeout(()=>{if(!ready)$('#d1').textContent='NO CARGÓ EL REPRODUCTOR DE YOUTUBE (¿BLOQUEADOR DE ANUNCIOS?)'},5000);
+ if(ready)load();else setTimeout(()=>{if(!ready)$('#d1').textContent=window.ytBlk?'EL NAVEGADOR BLOQUEÓ EL SCRIPT DE YOUTUBE (BLOQUEADOR, EXTENSIÓN O RED)':'EL REPRODUCTOR DE YOUTUBE TARDA EN CARGAR. PROBÁ DE NUEVO'},5000);
 }
 function load(){
  if(P)P.loadVideoById(vid);
@@ -269,28 +270,33 @@ function tick(){
  if(endT!=null&&c>=endT){P.pauseVideo();endT=null}
  const t=P.getVideoData&&P.getVideoData().title;if(t&&t!==lt&&!err){lt=t;$('#d1').textContent=t}
  $('#d2').textContent=fmt(c);
- $('#d3').textContent='MARCAS '+marks.filter(x=>x!=null).length+'  NOTAS '+seq.notes.length+'  '+nm;
+ $('#d3').textContent='MARCAS '+marks.filter(x=>x!=null).length+'  NOTAS '+seq.notes.length+'  BANCO '+(bank?'B':'A')+'  '+nm;
 }
 const CODES=['Digit1','Digit2','Digit3','Digit4','KeyQ','KeyW','KeyE','KeyR','KeyA','KeyS','KeyD','KeyF','KeyZ','KeyX','KeyC','KeyV'];
 const LBL='1234QWERASDFZXCV';
 function draw(){
  $('#tl').querySelectorAll('.tk').forEach(n=>n.remove());
  if(lastD)marks.forEach((t,i)=>{if(t==null)return;const d=document.createElement('div');d.className='tk';d.style.left=(t/lastD*100)+'%';d.innerHTML='<b>'+(i+1)+'</b>';$('#tl').appendChild(d)});
- $('#pads').innerHTML=marks.map((t,i)=>'<button class="pad'+(t!=null?' on':'')+'" data-i="'+i+'"><b>'+(i+1)+'</b>'+LBL[i]+'<i>'+(t!=null?t.toFixed(2)+'s':'vacío')+'</i></button>').join('');
+ $('#pads').innerHTML=(bank?DR.map(d=>d?d.name:null):marks).map((t,i)=>{const on=t!=null,tx=bank?(on?esc(String(t).slice(0,10)):'vacío'):(on?t.toFixed(2)+'s':'vacío');return '<button class="pad'+(on?' on':'')+'" data-i="'+i+'"><b>'+(i+1)+'</b>'+LBL[i]+'<i>'+tx+'</i></button>'}).join('');
  roll();
 }
-function flash(i){const el=document.querySelector('.pad[data-i="'+i+'"]');if(el){el.classList.add('hit');setTimeout(()=>el.classList.remove('hit'),130)}}
+function flash(i,b){if(b!==bank)return;const el=document.querySelector('.pad[data-i="'+i+'"]');if(el){el.classList.add('hit');setTimeout(()=>el.classList.remove('hit'),130)}}
 function play(i){
  const t=marks[i];if(t==null||!P)return;
  const nx=marks.filter(x=>x!=null&&x>t).sort((a,b)=>a-b)[0];
  endT=$('#cut').checked&&nx!=null?nx:null;
- P.seekTo(t,true);P.playVideo();flash(i);
+ P.seekTo(t,true);P.playVideo();flash(i,0);
 }
 function padPress(i,sh){
+ if(bank===1){
+  if(sh){DR[i]=null;dbDel(i);draw();return}
+  if(!DR[i]||$('#am').classList.contains('live')){dT=i;$('#df').click();return}
+  playDrum(i);if(recSeq)rec.push({t:performance.now()-t0,i,b:1});return;
+ }
  if(!P||!P.getCurrentTime){$('#d1').textContent='PRIMERO CARGÁ UN VIDEO';return}
  if(sh){marks[i]=null;draw();return}
- if(marks[i]==null||$('#am').classList.contains('live')){marks[i]=+P.getCurrentTime().toFixed(2);draw();flash(i);return}
- play(i);if(recSeq)rec.push({t:performance.now()-t0,i});
+ if(marks[i]==null||$('#am').classList.contains('live')){marks[i]=+P.getCurrentTime().toFixed(2);draw();flash(i,0);return}
+ play(i);if(recSeq)rec.push({t:performance.now()-t0,i,b:0});
 }
 $('#pads').onclick=e=>{const b=e.target.closest('.pad');if(b)padPress(+b.dataset.i,e.shiftKey)};
 $('#tl').onclick=e=>{if(!P||!lastD)return;const r=$('#tl').getBoundingClientRect();P.seekTo((e.clientX-r.left)/r.width*lastD,true)};
@@ -313,17 +319,18 @@ function roll(){
  const cv=$('#roll'),cols=seq.bars*16;cv.width=G+cols*CW;cv.height=16*CH;
  const x=cv.getContext('2d');x.fillStyle='#120a09';x.fillRect(0,0,cv.width,cv.height);
  x.font='12px "Courier New"';
- for(let r=0;r<16;r++){const p=15-r;x.fillStyle=marks[p]!=null?'#33261a':'#1c1613';x.fillRect(G,r*CH,cols*CW,CH-1);x.fillStyle=marks[p]!=null?'#ffb13b':'#6b6350';x.fillText(p+1,5,r*CH+13)}
+ const has=p=>bank?!!DR[p]:marks[p]!=null;
+ for(let r=0;r<16;r++){const p=15-r;x.fillStyle=has(p)?'#33261a':'#1c1613';x.fillRect(G,r*CH,cols*CW,CH-1);x.fillStyle=has(p)?'#ffb13b':'#6b6350';x.fillText(p+1,5,r*CH+13)}
  for(let c=0;c<=cols;c++){x.fillStyle=c%4===0?'#8d846f':'#3a342d';x.fillRect(G+c*CW,0,1,cv.height)}
- seq.notes.forEach(n=>{x.fillStyle='#ff4a3a';x.fillRect(G+n.s*CW+2,(15-n.i)*CH+2,CW-4,CH-5)});
+ seq.notes.filter(n=>(n.b||0)===bank).forEach(n=>{x.fillStyle='#ff4a3a';x.fillRect(G+n.s*CW+2,(15-n.i)*CH+2,CW-4,CH-5)});
  if(cur>=0){x.fillStyle='rgba(255,177,59,.3)';x.fillRect(G+cur*CW,0,CW,cv.height)}
 }
 $('#roll').onclick=e=>{
  const r=e.target.getBoundingClientRect(),k=e.target.width/r.width;
  const c=Math.floor(((e.clientX-r.left)*k-G)/CW),p=15-Math.floor((e.clientY-r.top)*k/CH);
  if(c<0||c>=seq.bars*16||p<0||p>15)return;
- const j=seq.notes.findIndex(n=>n.s===c&&n.i===p);
- if(j>=0)seq.notes.splice(j,1);else{seq.notes.push({s:c,i:p});play(p)}
+ const j=seq.notes.findIndex(n=>n.s===c&&n.i===p&&(n.b||0)===bank);
+ if(j>=0)seq.notes.splice(j,1);else{seq.notes.push({s:c,i:p,b:bank});bank?playDrum(p):play(p)}
  roll();
 };
 $('#bpm').onchange=()=>{seq.bpm=Math.min(220,Math.max(40,+$('#bpm').value||90));$('#bpm').value=seq.bpm};
@@ -331,14 +338,14 @@ $('#bars').onchange=()=>{seq.bars=+$('#bars').value;seq.notes=seq.notes.filter(n
 $('#cl').onclick=()=>{seq.notes=[];roll()};
 function beep(f){const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;g.gain.value=.15;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+.04)}
 function startClick(){
- if(!$('#met').checked)return;ac=ac||new AudioContext();
+ if(!$('#met').checked)return;ac=ac||new AudioContext();if(ac.state==='suspended')ac.resume();
  const b=60000/seq.bpm,s0=performance.now();let k=0;
  const f=()=>{if(!recSeq)return;beep(k%4===0?1500:1000);k++;ck=setTimeout(f,Math.max(0,s0+k*b-performance.now()))};f();
 }
 function finishRec(){
  recSeq=false;clearTimeout(ck);$('#sr').textContent='● Grabar';$('#sr').classList.remove('live');
  const st=60000/seq.bpm/4;let mx=0;
- rec.forEach(e=>{const s=Math.round(e.t/st);mx=Math.max(mx,s);if(!seq.notes.some(n=>n.s===s&&n.i===e.i))seq.notes.push({s,i:e.i})});
+ rec.forEach(e=>{const s=Math.round(e.t/st);mx=Math.max(mx,s);if(!seq.notes.some(n=>n.s===s&&n.i===e.i&&(n.b||0)===(e.b||0)))seq.notes.push({s,i:e.i,b:e.b||0})});
  const nb=Math.ceil((mx+1)/16);seq.bars=Math.max(seq.bars,nb<=1?1:nb<=2?2:4);
  seq.notes=seq.notes.filter(n=>n.s<seq.bars*16);$('#bars').value=seq.bars;roll();
 }
@@ -349,7 +356,7 @@ $('#sp').onclick=()=>{
  playing=true;const st=60000/seq.bpm/4,len=seq.bars*16;let n=0,t=performance.now();
  const step=()=>{
   if(!playing)return;
-  seq.notes.filter(x=>x.s===n).forEach(x=>play(x.i));
+  seq.notes.filter(x=>x.s===n).forEach(x=>x.b?playDrum(x.i):play(x.i));
   cur=n;roll();n++;
   if(n>=len){if(!$('#lp').checked){tmo=setTimeout(stopSeq,st);return}n=0}
   t+=st;tmo=setTimeout(step,Math.max(0,t-performance.now()));
@@ -427,17 +434,39 @@ async function chVideos(pl,reset){
   if(reset)box.innerHTML='';
   box.insertAdjacentHTML('beforeend',v.map(vi).join('')||(reset&&!pt?'<p>No hay videos con esa duración.</p>':''));
   $('#chm').hidden=!pt;
- }catch(e){box.textContent='Error: '+e.message}
+ }catch(e){
+  if(reset&&chCur&&pl===chCur.c.up&&/cannot be found|playlistNotFound/i.test(e.message)){chLists('Este canal no tiene videos propios. Estas son sus listas:');return}
+  box.textContent='Error: '+e.message;
+ }
 }
-async function chLists(){
+async function chLists(nota){
  const box=$('#chv');box.textContent='Cargando listas...';$('#chm').hidden=true;
  try{
   const j=await yget('playlists','part=snippet,contentDetails&maxResults=50&channelId='+chCur.c.id);
-  box.innerHTML=j.items.map(x=>'<div class="it" data-pl="'+x.id+'"><img src="'+esc(((x.snippet.thumbnails||{}).default||{}).url||'')+'" alt=""><span>'+esc(x.snippet.title)+'<small>'+x.contentDetails.itemCount+' videos</small></span></div>').join('')||'Este canal no tiene listas.';
+  box.innerHTML=(nota?'<p>'+esc(nota)+'</p>':'')+(j.items.map(x=>'<div class="it" data-pl="'+x.id+'"><img src="'+esc(((x.snippet.thumbnails||{}).default||{}).url||'')+'" alt=""><span>'+esc(x.snippet.title)+'<small>'+x.contentDetails.itemCount+' videos</small></span></div>').join('')||'Este canal no tiene listas.');
  }catch(e){box.textContent='Error: '+e.message}
 }
 $('#chh').onclick=e=>{const t=e.target.dataset.t;if(!chCur||!t)return;if(t==='v')chVideos(chCur.c.up,true);else chLists()};
 $('#chm').onclick=()=>chVideos(cpl,false);
 renderCh();
+/* Banco B: drums */
+const idb=()=>new Promise((ok,no)=>{try{const r=indexedDB.open('chopdigger',1);r.onupgradeneeded=()=>r.result.createObjectStore('drums');r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)}catch(e){no(e)}});
+async function dbPut(i,v){const d=await idb();return new Promise((ok,no)=>{const t=d.transaction('drums','readwrite');t.objectStore('drums').put(v,i);t.oncomplete=ok;t.onerror=()=>no(t.error)})}
+async function dbDel(i){try{const d=await idb();return new Promise(ok=>{const t=d.transaction('drums','readwrite');t.objectStore('drums').delete(i);t.oncomplete=ok;t.onerror=ok})}catch(e){}}
+async function dbAll(){const d=await idb();return new Promise(ok=>{const out={},q=d.transaction('drums').objectStore('drums').openCursor();q.onsuccess=()=>{const c=q.result;if(c){out[c.key]=c.value;c.continue()}else ok(out)};q.onerror=()=>ok(out)})}
+const AC=()=>{ac=ac||new (window.AudioContext||window.webkitAudioContext)();return ac};
+function setBank(b){bank=b;$('#bkA').classList.toggle('live',b===0);$('#bkB').classList.toggle('live',b===1);draw()}
+async function loadDrum(i,f){
+ try{const data=await f.arrayBuffer(),buf=await AC().decodeAudioData(data.slice(0));DR[i]={name:f.name.replace(/\.[^.]+$/,''),buf};dbPut(i,{name:DR[i].name,data}).catch(()=>{})}
+ catch(e){$('#d1').textContent='NO PUDE LEER '+f.name.toUpperCase()}
+ draw();
+}
+function playDrum(i){const d=DR[i];if(!d)return;const c=AC();if(c.state==='suspended')c.resume();const s=c.createBufferSource();s.buffer=d.buf;s.connect(c.destination);s.start();flash(i,1)}
+$('#bkA').onclick=()=>setBank(0);$('#bkB').onclick=()=>setBank(1);
+$('#df').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f&&dT>=0)await loadDrum(dT,f)};
+$('#dl').onchange=async e=>{const fs=[...e.target.files];e.target.value='';setBank(1);let i=0;for(const f of fs){while(i<16&&DR[i])i++;if(i>=16)break;await loadDrum(i,f)}};
+$('#dc').onclick=()=>{if(!confirm('¿Borrar todos los drums guardados?'))return;DR=Array(16).fill(null);for(let i=0;i<16;i++)dbDel(i);draw()};
+addEventListener('keydown',e=>{if(e.code==='Backquote'&&!e.repeat&&!/INPUT|SELECT/.test(e.target.tagName)){e.preventDefault();setBank(bank?0:1)}});
+dbAll().then(async o=>{for(const k in o){try{DR[k]={name:o[k].name,buf:await AC().decodeAudioData(o[k].data.slice(0))}}catch(e){}}draw()}).catch(()=>{});
 draw();
 </script></body></html>
